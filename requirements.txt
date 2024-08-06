@@ -1,0 +1,5 @@
+PyQt6
+openai
+aiohttp
+Pillow
+asyncio
