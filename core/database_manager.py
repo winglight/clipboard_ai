@@ -91,7 +91,7 @@ class DatabaseManager:
 
     def clear_history(self):
         cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM chat_history")
+        cursor.execute("DELETE FROM clips")
         self.conn.commit()
         
     def close(self):

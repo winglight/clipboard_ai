@@ -4,6 +4,7 @@ import base64
 from PIL import Image
 import io
 import os
+import shutil
 import asyncio
 import json
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
@@ -286,18 +287,21 @@ class MainWindow(QMainWindow):
                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             self.history_list.clear()
-            self.content_display.clear()
             self.db_manager.clear_history()
+            shutil.rmtree(self.clips_dir)
 
     def delete_selected_item(self):
         current_item = self.history_list.currentItem()
         if current_item:
             row = self.history_list.row(current_item)
             self.history_list.takeItem(row)
-            if self.history_list.count() == 0:
-                self.content_display.clear()
             clip_id = current_item.data(Qt.ItemDataRole.UserRole)
+            clip = self.db_manager.get_clip(clip_id)
             self.db_manager.delete_chat(clip_id)
+            
+            _, clip_type, content, file_path, _ = clip
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
 
 class ImageViewer(QMainWindow):
     def __init__(self, pixmap, parent=None):
