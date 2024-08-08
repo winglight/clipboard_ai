@@ -76,7 +76,7 @@ class AIInterface(QObject):
     async def send_to_ollama(self, content, prompt):
         # print(content, prompt)
         other_settings = self.current_config['other_settings']
-        # print(f"Other settings: {other_settings}")
+        print(f"Other settings: {other_settings}")
         url = other_settings.get('api_url', 'http://localhost:11434') + '/api/generate'
         print(url)
         
@@ -90,7 +90,7 @@ class AIInterface(QObject):
             payload["prompt"] = f"{prompt}"
             payload["images"] = [content]
 
-        # print(f"Sending to Ollama API: {payload}")
+        print(f"Sending to Ollama API: {payload}")
         # 添加其他可能的配置选项
         # if 'temperature' in other_settings:
         #     payload['temperature'] = float(other_settings['temperature'])

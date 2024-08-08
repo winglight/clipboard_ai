@@ -10,7 +10,7 @@ import json
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QListWidget, QLabel, QPushButton, QComboBox, 
                              QListWidgetItem, QTextEdit, QMessageBox, QMenuBar, QMenu,
-                             QScrollArea, QSizePolicy)
+                             QScrollArea, QSizePolicy, QSplitter)
 from PyQt6.QtCore import Qt, QBuffer, QByteArray, QRunnable, QThreadPool, QObject, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QImage, QPixmap, QAction, QKeySequence, QGuiApplication, QKeyEvent
 from core.clipboard_monitor import ClipboardMonitor
@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Clipboard AI")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1000, 700)  # 调整初始窗口大小
 
         self.clipboard_monitor = ClipboardMonitor()
         self.ai_interface = AIInterface()
@@ -74,12 +74,16 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        self.image_viewer = None  # Add this line
+        self.image_viewer = None
 
-        layout = QHBoxLayout()
-        central_widget.setLayout(layout)
+        main_layout = QHBoxLayout()
+        central_widget.setLayout(main_layout)
 
-        # Left panel
+        # 创建主分割器
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_layout.addWidget(self.main_splitter)
+
+        # 左面板
         left_panel = QWidget()
         left_layout = QVBoxLayout()
         left_panel.setLayout(left_layout)
@@ -90,22 +94,37 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(QLabel("History:"))
         left_layout.addWidget(self.history_list)
 
-        # Add Clear button
         clear_button = QPushButton("Clear")
         clear_button.clicked.connect(self.clear_history)
-        left_layout.addWidget(clear_button)  # 修改这一行
+        left_layout.addWidget(clear_button)
 
-        # Right panel
+        # 右面板
         right_panel = QWidget()
         right_layout = QVBoxLayout()
         right_panel.setLayout(right_layout)
 
-        self.clip_display = QLabel()
-        self.clip_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.clip_display.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.clip_display.setStyleSheet("QLabel { background-color: white; }")
-        self.clip_display.mousePressEvent = self.on_clip_display_click
+        # 创建右面板的分割器
+        self.right_splitter = QSplitter(Qt.Orientation.Vertical)
+        right_layout.addWidget(self.right_splitter)
 
+        # 上部分：剪贴内容显示
+        upper_widget = QWidget()
+        upper_layout = QVBoxLayout()
+        upper_widget.setLayout(upper_layout)
+
+        self.clip_display = QTextEdit()  # 改用 QTextEdit
+        self.clip_display.setReadOnly(True)
+        self.clip_display.setAlignment(Qt.AlignmentFlag.AlignLeft)  # 文本左对齐
+        self.clip_display.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.clip_display.setStyleSheet("QTextEdit { background-color: white; }")
+
+        upper_layout.addWidget(QLabel("Clip Content:"))
+        upper_layout.addWidget(self.clip_display)
+
+        # 下部分：AI 相关控件
+        lower_widget = QWidget()
+        lower_layout = QVBoxLayout()
+        lower_widget.setLayout(lower_layout)
 
         self.model_selector = QComboBox()
         self.model_selector.currentIndexChanged.connect(self.change_ai_model)
@@ -116,23 +135,57 @@ class MainWindow(QMainWindow):
         self.ai_response = QTextEdit()
         self.ai_response.setReadOnly(True)
 
-        right_layout.addWidget(QLabel("Clip Content:"))
-        right_layout.addWidget(self.clip_display)
-        right_layout.addWidget(QLabel("AI Model:"))
-        right_layout.addWidget(self.model_selector)
-        right_layout.addWidget(self.send_button)
-        right_layout.addWidget(QLabel("AI Response:"))
-        right_layout.addWidget(self.ai_response)
+        lower_layout.addWidget(QLabel("AI Model:"))
+        lower_layout.addWidget(self.model_selector)
+        lower_layout.addWidget(self.send_button)
+        lower_layout.addWidget(QLabel("AI Response:"))
+        lower_layout.addWidget(self.ai_response)
 
-        # Add panels to main layout
-        layout.addWidget(left_panel, 1)
-        layout.addWidget(right_panel, 2)
+        # 添加部件到右面板分割器
+        self.right_splitter.addWidget(upper_widget)
+        self.right_splitter.addWidget(lower_widget)
 
-        # Add keyboard shortcut for delete
+        # 设置初始大小
+        self.right_splitter.setSizes([350, 350])
+
+        # 添加面板到主分割器
+        self.main_splitter.addWidget(left_panel)
+        self.main_splitter.addWidget(right_panel)
+
+        # 设置左面板的固定宽度
+        left_panel.setMinimumWidth(200)
+        left_panel.setMaximumWidth(300)
+
+        # 添加键盘快捷键
         delete_action = QAction("Delete", self)
         delete_action.setShortcut(QKeySequence.StandardKey.Delete)
         delete_action.triggered.connect(self.delete_selected_item)
         self.addAction(delete_action)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # 调整右面板分割器的大小
+        total_height = self.right_splitter.height()
+        self.right_splitter.setSizes([total_height // 2, total_height // 2])
+
+    def display_clip(self, item):
+        clip_id = item.data(Qt.ItemDataRole.UserRole)
+        clip = self.db_manager.get_clip(clip_id)
+        _, clip_type, content, file_path, _, ai_response = clip
+
+        if clip_type == "text":
+            self.clip_display.setPlainText(content)
+        elif clip_type == "image":
+            pixmap = QPixmap(file_path)
+            if not pixmap.isNull():
+                self.clip_display.clear()
+                self.clip_display.insertHtml(f'<img src="{file_path}" width="100%">')
+            else:
+                self.clip_display.setPlainText("Error loading image.")
+        if ai_response:
+            self.ai_response.setPlainText(ai_response)
+        else:
+            self.ai_response.setPlainText("")
 
     def on_clip_display_click(self, event):
         if event.button() == Qt.MouseButton.LeftButton and event.type() == event.Type.MouseButtonDblClick:
@@ -161,13 +214,13 @@ class MainWindow(QMainWindow):
     def load_history(self):
         clips = self.db_manager.get_all_clips()
         for clip in clips:
-            clip_id, clip_type, content, file_path, timestamp = clip
+            clip_id, clip_type, content, file_path, timestamp, ai_response = clip
             item = QListWidgetItem(f"{clip_type.capitalize()} - {timestamp}")
             item.setData(Qt.ItemDataRole.UserRole, clip_id)
             self.history_list.addItem(item)
 
     def load_configs(self):
-        self.model_selector.clear()  # Clear existing items before reloading
+        self.model_selector.clear()
         configs = self.db_manager.get_configs()
         for config in configs:
             config_id, name, config_type, api_key, model, other_settings = config
@@ -204,55 +257,45 @@ class MainWindow(QMainWindow):
 
         clip_id = selected_items[0].data(Qt.ItemDataRole.UserRole)
         clip = self.db_manager.get_clip(clip_id)
-        _, clip_type, content, file_path, _ = clip
+        _, clip_type, content, file_path, _, _ = clip
 
         if clip_type == "image":
             prompt = PROMPT_IMAGE
-            # 使用PIL库加载图片对象
             img = Image.open(file_path)
-            # img = img.resize((int(img.width/2), int(img.height/2)), resample=Image.LANCZOS)
             img = img.convert("P", palette=Image.ADAPTIVE, colors=256)
 
-            # 将图片对象转换为bytes格式
             img_bytes = io.BytesIO()
             img.save(img_bytes, format='PNG')
-            # 获取保存的二进制数据
             img_bytes = img_bytes.getvalue()
 
-            # 将图片bytes转换为base64编码
             img_base64 = base64.b64encode(img_bytes).decode('utf-8')
-            content = img_base64  # For simplicity, we're just sending the file path. In a real application, you might want to send the image data.
+            content = img_base64
         else:
             prompt = PROMPT_TEXT
 
         worker = AIWorker(self.ai_interface, content, prompt)
-        worker.signals.finished.connect(self.display_ai_response)
+        worker.signals.finished.connect(lambda response: self.display_ai_response(response, clip_id))
         worker.signals.error.connect(self.display_error)
 
         self.threadpool.start(worker)
         self.ai_response.setText("Waiting for AI response...")
 
-    def display_ai_response(self, response):
+    def display_ai_response(self, response, clip_id):
         self.ai_response.setText(response)
+        
+        # 保存 AI 响应到数据库
+        self.db_manager.update_clip_response(clip_id, response)
+        
+        # 更新历史列表项
+        for i in range(self.history_list.count()):
+            item = self.history_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == clip_id:
+                item.setText(f"{item.text()} (AI processed)")
+                break
 
     def display_error(self, error):
         self.ai_response.setText(f"Error: {error}")
         QMessageBox.critical(self, "AI Error", f"An error occurred: {error}")
-
-    def display_clip(self, item):
-        clip_id = item.data(Qt.ItemDataRole.UserRole)
-        clip = self.db_manager.get_clip(clip_id)
-        _, clip_type, content, file_path, _ = clip
-
-        if clip_type == "text":
-            self.clip_display.setText(content)
-        elif clip_type == "image":
-            pixmap = QPixmap(file_path)
-            if not pixmap.isNull():
-                scaled_pixmap = pixmap.scaled(self.clip_display.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                self.clip_display.setPixmap(scaled_pixmap)
-            else:
-                self.clip_display.setText("Error loading image.")
 
     def on_text_copied(self, text):
         clip_id = self.db_manager.add_clip("text", text)
@@ -276,9 +319,8 @@ class MainWindow(QMainWindow):
             self.open_config_dialog()
 
     def open_config_dialog(self):
-        config_dialog = ConfigDialog(self.db_manager)
+        config_dialog = ConfigDialog(self.db_manager, self)
         if config_dialog.exec():
-            # 如果对话框被接受（用户点击了"确定"），重新加载配置
             self.load_configs()
 
     def clear_history(self):
@@ -289,6 +331,7 @@ class MainWindow(QMainWindow):
             self.history_list.clear()
             self.db_manager.clear_history()
             shutil.rmtree(self.clips_dir)
+            os.makedirs(self.clips_dir, exist_ok=True)
 
     def delete_selected_item(self):
         current_item = self.history_list.currentItem()

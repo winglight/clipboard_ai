@@ -18,6 +18,7 @@ class DatabaseManager:
             type TEXT NOT NULL,
             content TEXT,
             file_path TEXT,
+            ai_response TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
         ''')
@@ -33,6 +34,7 @@ class DatabaseManager:
             other_settings TEXT
         )
         ''')
+        
         self.conn.commit()
 
     def add_clip(self, clip_type, content, file_path=""):
@@ -43,6 +45,11 @@ class DatabaseManager:
         ''', (clip_type, content, file_path, timestamp))
         self.conn.commit()
         return self.cursor.lastrowid
+
+    def update_clip_response(self, clip_id, ai_response):
+        query = "UPDATE clips SET ai_response = ? WHERE id = ?"
+        self.cursor.execute(query, (ai_response, clip_id))
+        self.conn.commit()
 
     def get_clip(self, clip_id):
         self.cursor.execute('SELECT * FROM clips WHERE id = ?', (clip_id,))

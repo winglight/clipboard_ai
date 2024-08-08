@@ -7,9 +7,10 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdi
 from PyQt6.QtCore import Qt
 
 class ConfigDialog(QDialog):
-    def __init__(self, db_manager):
+    def __init__(self, db_manager, parent):
         super().__init__()
         self.db_manager = db_manager
+        self.parent = parent
         self.setWindowTitle("AI Configuration")
         self.setGeometry(200, 200, 700, 500)
         self.current_config_id = None
@@ -136,6 +137,7 @@ class ConfigDialog(QDialog):
                 self.db_manager.delete_config(config_id)
                 self.load_configs()
                 self.add_new_config()  # Clear the form after deletion
+                self.parent.load_configs()
 
     def save_config(self):
         name = self.name_input.text()
@@ -172,6 +174,7 @@ class ConfigDialog(QDialog):
         if items:
             self.config_list.setCurrentItem(items[0])
             self.load_config(items[0])
+        self.parent.load_configs()
 
     def closeEvent(self, event):
         self.load_configs()
