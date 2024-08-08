@@ -106,13 +106,18 @@ class ConfigDialog(QDialog):
                 self.openai_api_key_input.setText(api_key)
                 self.openai_model_input.setText(model)
             elif config_type == "ollama":
-                try:
-                    other_settings_dict = json.loads(other_settings)
-                    self.ollama_api_url_input.setText(other_settings_dict.get('api_url', ''))
-                except json.JSONDecodeError:
-                    # 如果 other_settings 不是有效的 JSON，就使用空字符串
-                    self.ollama_api_url_input.setText('')
                 self.ollama_model_input.setText(model)
+            try:
+                if other_settings and isinstance(other_settings, str):
+                    other_settings_dict = json.loads(other_settings)
+                    if isinstance(other_settings_dict, dict):
+                        self.ollama_api_url_input.setText(other_settings_dict.get('api_url', ''))
+                    else:
+                        self.ollama_api_url_input.setText('')
+                else:
+                    self.ollama_api_url_input.setText('')
+            except json.JSONDecodeError:
+                self.ollama_api_url_input.setText('')
 
     def on_type_changed(self, index):
         self.stacked_widget.setCurrentIndex(index)
@@ -154,7 +159,7 @@ class ConfigDialog(QDialog):
             api_key = ''
             model = self.ollama_model_input.text()
             api_url = self.ollama_api_url_input.text()
-            other_settings = json.dumps({'api_url': api_url})
+            other_settings = {'api_url': api_url}
         
         if self.current_config_id is not None:
             # Update existing config
