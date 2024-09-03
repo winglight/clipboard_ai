@@ -2,6 +2,8 @@
 # Clipboard AI
 
 Clipboard AI 是一个功能强大的剪贴板管理工具，通过将 AI 功能直接集成到您的剪贴板工作流程中，提升您的工作效率。该工具监控您的剪贴板文本和图像内容，并根据您复制的内容实时提供 AI 驱动的建议、修改和增强功能。
+![软件截屏](./screenshot/screenshot.jpg)
+![软件截屏2](./screenshot/screenshot2.jpg)
 
 ## 特别说明
 

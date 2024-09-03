@@ -4,6 +4,7 @@ import base64
 from PIL import Image
 import io
 import os
+import time
 import shutil
 import asyncio
 import json
@@ -20,7 +21,7 @@ from ui.config_dialog import ConfigDialog
 
 class AIWorker(QRunnable):
     class Signals(QObject):
-        finished = pyqtSignal(str)
+        finished = pyqtSignal(str, float)  # 添加处理时间
         error = pyqtSignal(str)
 
     def __init__(self, ai_interface, content, prompt):
@@ -36,8 +37,11 @@ class AIWorker(QRunnable):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
+            start_time = time.time()  # 记录开始时间
             response = loop.run_until_complete(self.ai_interface.send_to_ai(self.content, self.prompt))
-            self.signals.finished.emit(response)
+            end_time = time.time()  # 记录结束时间
+            processing_time = end_time - start_time  # 计算处理时间
+            self.signals.finished.emit(response, processing_time)
         except Exception as e:
             self.signals.error.emit(str(e))
         finally:
@@ -135,11 +139,14 @@ class MainWindow(QMainWindow):
         self.ai_response = QTextEdit()
         self.ai_response.setReadOnly(True)
 
+        self.ai_response_time_label = QLabel() 
+
         lower_layout.addWidget(QLabel("AI Model:"))
         lower_layout.addWidget(self.model_selector)
         lower_layout.addWidget(self.send_button)
         lower_layout.addWidget(QLabel("AI Response:"))
         lower_layout.addWidget(self.ai_response)
+        lower_layout.addWidget(self.ai_response_time_label) 
 
         # 添加部件到右面板分割器
         self.right_splitter.addWidget(upper_widget)
@@ -171,7 +178,7 @@ class MainWindow(QMainWindow):
     def display_clip(self, item):
         clip_id = item.data(Qt.ItemDataRole.UserRole)
         clip = self.db_manager.get_clip(clip_id)
-        _, clip_type, content, file_path, _, ai_response = clip
+        _, clip_type, content, file_path, _, ai_response, processing_time = clip
 
         if clip_type == "text":
             self.clip_display.setPlainText(content)
@@ -184,8 +191,13 @@ class MainWindow(QMainWindow):
                 self.clip_display.setPlainText("Error loading image.")
         if ai_response:
             self.ai_response.setPlainText(ai_response)
+            if processing_time:
+                self.ai_response_time_label.setText(f"Processing time: {processing_time}")
+            else:
+                self.ai_response_time_label.setText("")
         else:
             self.ai_response.setPlainText("")
+            self.ai_response_time_label.setText("")
 
     def on_clip_display_click(self, event):
         if event.button() == Qt.MouseButton.LeftButton and event.type() == event.Type.MouseButtonDblClick:
@@ -214,7 +226,7 @@ class MainWindow(QMainWindow):
     def load_history(self):
         clips = self.db_manager.get_all_clips()
         for clip in clips:
-            clip_id, clip_type, content, file_path, timestamp, ai_response = clip
+            clip_id, clip_type, content, file_path, timestamp, ai_response, processing_time = clip
             item = QListWidgetItem(f"{clip_type.capitalize()} - {timestamp}")
             item.setData(Qt.ItemDataRole.UserRole, clip_id)
             self.history_list.addItem(item)
@@ -257,7 +269,7 @@ class MainWindow(QMainWindow):
 
         clip_id = selected_items[0].data(Qt.ItemDataRole.UserRole)
         clip = self.db_manager.get_clip(clip_id)
-        _, clip_type, content, file_path, _, _ = clip
+        _, clip_type, content, file_path, _, _, _ = clip
 
         if clip_type == "image":
             prompt = PROMPT_IMAGE
@@ -274,17 +286,24 @@ class MainWindow(QMainWindow):
             prompt = PROMPT_TEXT
 
         worker = AIWorker(self.ai_interface, content, prompt)
-        worker.signals.finished.connect(lambda response: self.display_ai_response(response, clip_id))
+        worker.signals.finished.connect(lambda response, time: self.display_ai_response(response, time, clip_id))
         worker.signals.error.connect(self.display_error)
 
         self.threadpool.start(worker)
         self.ai_response.setText("Waiting for AI response...")
+        self.ai_response_time_label.setText("Processing...")
 
-    def display_ai_response(self, response, clip_id):
+    def display_ai_response(self, response, processing_time, clip_id):
         self.ai_response.setText(response)
         
-        # 保存 AI 响应到数据库
-        self.db_manager.update_clip_response(clip_id, response)
+        # 格式化处理时间
+        formatted_time = f"{processing_time:.2f} seconds"
+        
+        # 更新AI响应时间标签
+        self.ai_response_time_label.setText(f"Processing time: {formatted_time}")
+        
+        # 保存 AI 响应和处理时间到数据库
+        self.db_manager.update_clip_response(clip_id, response, formatted_time)
         
         # 更新历史列表项
         for i in range(self.history_list.count()):
