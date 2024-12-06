@@ -35,9 +35,14 @@ class DatabaseManager:
             other_settings TEXT
         )
         ''')
-        # self.cursor.execute('''
-        # ALTER TABLE clips ADD COLUMN processing_time TEXT;
-        # ''')
+        
+        # Create prompts table
+        self.cursor.execute('''
+        CREATE TABLE IF NOT EXISTS prompts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prompt TEXT NOT NULL
+        )
+        ''')
         
         self.conn.commit()
 
@@ -111,5 +116,17 @@ class DatabaseManager:
         cursor.execute("DELETE FROM clips")
         self.conn.commit()
         
+    def add_prompt(self, prompt):
+        self.cursor.execute('''
+        INSERT INTO prompts (prompt)
+        VALUES (?)
+        ''', (prompt,))
+        self.conn.commit()
+        return self.cursor.lastrowid
+
+    def get_prompts(self):
+        self.cursor.execute('SELECT * FROM prompts')
+        return self.cursor.fetchall()
+    
     def close(self):
         self.conn.close()

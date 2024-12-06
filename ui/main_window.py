@@ -24,11 +24,12 @@ class AIWorker(QRunnable):
         finished = pyqtSignal(str, float)  # 添加处理时间
         error = pyqtSignal(str)
 
-    def __init__(self, ai_interface, content, prompt):
+    def __init__(self, ai_interface, content, prompt, clip_type):
         super().__init__()
         self.ai_interface = ai_interface
         self.content = content
         self.prompt = prompt
+        self.clip_type = clip_type
         self.signals = AIWorker.Signals()
 
     @pyqtSlot()
@@ -38,7 +39,7 @@ class AIWorker(QRunnable):
         asyncio.set_event_loop(loop)
         try:
             start_time = time.time()  # 记录开始时间
-            response = loop.run_until_complete(self.ai_interface.send_to_ai(self.content, self.prompt))
+            response = loop.run_until_complete(self.ai_interface.send_to_ai(self.content, self.prompt, self.clip_type))
             end_time = time.time()  # 记录结束时间
             processing_time = end_time - start_time  # 计算处理时间
             self.signals.finished.emit(response, processing_time)
@@ -136,6 +137,16 @@ class MainWindow(QMainWindow):
         self.send_button = QPushButton("Send to AI")
         self.send_button.clicked.connect(self.send_to_ai)
 
+        # 创建 ComboBox
+        self.prompt_combobox = QComboBox(self)
+        self.prompt_combobox.setEditable(True)
+        self.prompt_history = self.db_manager.get_prompts()
+        if not self.prompt_history:
+            self.db_manager.add_prompt("解释此图")
+            self.db_manager.add_prompt("翻译并解释以下内容:")
+            self.prompt_history = self.db_manager.get_prompts()
+        for _,prompt in self.prompt_history: self.prompt_combobox.addItem(prompt)
+
         self.ai_response = QTextEdit()
         self.ai_response.setReadOnly(True)
 
@@ -143,6 +154,7 @@ class MainWindow(QMainWindow):
 
         lower_layout.addWidget(QLabel("AI Model:"))
         lower_layout.addWidget(self.model_selector)
+        lower_layout.addWidget(self.prompt_combobox)
         lower_layout.addWidget(self.send_button)
         lower_layout.addWidget(QLabel("AI Response:"))
         lower_layout.addWidget(self.ai_response)
@@ -271,8 +283,15 @@ class MainWindow(QMainWindow):
         clip = self.db_manager.get_clip(clip_id)
         _, clip_type, content, file_path, _, _, _ = clip
 
+        # 获取当前提示词
+        prompt = self.prompt_combobox.currentText()
+        if prompt and prompt not in self.prompt_history:
+            self.prompt_combobox.addItem(prompt)
+            self.prompt_history.append(prompt)
+            self.db_manager.add_prompt(prompt)
+
         if clip_type == "image":
-            prompt = PROMPT_IMAGE
+            # prompt = PROMPT_IMAGE
             img = Image.open(file_path)
             img = img.convert("P", palette=Image.ADAPTIVE, colors=256)
 
@@ -282,10 +301,10 @@ class MainWindow(QMainWindow):
 
             img_base64 = base64.b64encode(img_bytes).decode('utf-8')
             content = img_base64
-        else:
-            prompt = PROMPT_TEXT
+        # else:
+        #     prompt = PROMPT_TEXT
 
-        worker = AIWorker(self.ai_interface, content, prompt)
+        worker = AIWorker(self.ai_interface, content, prompt, clip_type)
         worker.signals.finished.connect(lambda response, time: self.display_ai_response(response, time, clip_id))
         worker.signals.error.connect(self.display_error)
 

@@ -20,15 +20,15 @@ class AIInterface(QObject):
             # 初始化 OpenAI 客户端
             self.openai_client = OpenAI(api_key=self.current_config['api_key'])
 
-    async def send_to_ai(self, content, prompt):
+    async def send_to_ai(self, content, prompt, clip_type):
         if not self.current_config:
             return "No AI model selected"
 
         try:
             if self.current_config['type'] == "openai":
-                response = await self.send_to_openai(content, prompt)
+                response = await self.send_to_openai(content, prompt, clip_type)
             elif self.current_config['type'] == "ollama":
-                response = await self.send_to_ollama(content, prompt)
+                response = await self.send_to_ollama(content, prompt, clip_type)
             else:
                 return "Unsupported AI model type"
 
@@ -38,7 +38,7 @@ class AIInterface(QObject):
             print(f"Error: {e}")
             return str(e)
 
-    async def send_to_openai(self, content, prompt):
+    async def send_to_openai(self, content, prompt, clip_type):
         # 构建消息列表
         messages = []
 
@@ -47,14 +47,14 @@ class AIInterface(QObject):
         messages.append(system_message)
 
         # 添加用户输入的文本消息
-        if prompt == PROMPT_IMAGE:
+        if clip_type == "image":
             user_message = {"role": "user", "content": f"{prompt}"}
         else:
             user_message = {"role": "user", "content": f"{prompt}\n\n{content}"}    
         messages.append(user_message)
 
         # 如果 content 是图片数据，则转换为多模态输入格式
-        if prompt == PROMPT_IMAGE:
+        if clip_type == "image":
             # 构建图片消息
             image_message = {"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{content}"}}
@@ -73,7 +73,7 @@ class AIInterface(QObject):
             return f"Error communicating with OpenAI: {e}"
 
 
-    async def send_to_ollama(self, content, prompt):
+    async def send_to_ollama(self, content, prompt, clip_type):
         # print(content, prompt)
         other_settings = self.current_config['other_settings']
         print(f"Other settings: {other_settings}")
@@ -83,12 +83,13 @@ class AIInterface(QObject):
         payload = {
             "model": self.current_config['model'],
             "stream": False,
-            "prompt": f"{prompt}\n\n{content}"
         }
 
-        if prompt == PROMPT_IMAGE:
+        if clip_type == "image":
             payload["prompt"] = f"{prompt}"
             payload["images"] = [content]
+        else:
+            payload["prompt"] = f"{prompt}\n{content}"
 
         print(f"Sending to Ollama API: {payload}")
         # 添加其他可能的配置选项
